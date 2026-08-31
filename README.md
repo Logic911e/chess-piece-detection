@@ -129,10 +129,21 @@ one king, so per-class precision and recall matter more than aggregate mAP.
 ## Training
 
 The usual route is `notebooks/train_colab.ipynb`, which runs the whole pipeline
-on a free Colab T4: clone, download, convert, audit, train, evaluate. Open it
-directly:
+on a free Colab T4: clone, download, convert, audit, train, evaluate.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Logic911e/chess-piece-detection/blob/main/notebooks/train_colab.ipynb)
+This repository is private, so Colab needs a token to open and clone it.
+
+**Opening the notebook:** in Colab, *File -> Open notebook -> GitHub*, tick
+**Include private repos**, and authorise when prompted. Alternatively upload
+`notebooks/train_colab.ipynb` directly.
+
+**Cloning inside the notebook:** create a fine-grained personal access token at
+<https://github.com/settings/personal-access-tokens/new>, scoped to this
+repository only with **Contents: Read-only**. In Colab, click the key icon in
+the sidebar, add it as a secret named `GITHUB_TOKEN`, and enable notebook
+access. The token stays in Colab Secrets, never in the notebook, and the clone
+cell redacts it from any error output and strips it from the git remote
+afterwards.
 
 The notebook downloads the dataset fresh each session rather than storing it on
 Drive. At about 7 GB extracted it would consume most of a free 15 GB Drive
