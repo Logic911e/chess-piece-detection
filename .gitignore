@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Data and model artefacts
+data/
+runs/
+reports/
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# Editors
+.idea/
+.vscode/
+
+# OS
+.DS_Store
