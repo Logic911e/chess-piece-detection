@@ -128,6 +128,19 @@ one king, so per-class precision and recall matter more than aggregate mAP.
 
 ## Training
 
+The usual route is `notebooks/train_colab.ipynb`, which runs the whole pipeline
+on a free Colab T4: clone, download, convert, audit, train, evaluate. Open it
+directly:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Logic911e/chess-piece-detection/blob/main/notebooks/train_colab.ipynb)
+
+The notebook downloads the dataset fresh each session rather than storing it on
+Drive. At about 7 GB extracted it would consume most of a free 15 GB Drive
+quota, and Colab fetches it in a few minutes regardless. Only weights and
+result tables are written to Drive.
+
+Locally:
+
 ```bash
 pip install ultralytics
 python src/train_yolo.py
