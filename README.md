@@ -185,6 +185,17 @@ are computed identically to the headline metric rather than reimplemented.
 This is what turns "performance dropped on real images" into a statement about
 *which conditions* break the model.
 
+## Results log
+
+Findings live in `RESULTS.md`. That file is a **mirror**: the working copy is
+the Obsidian note at `AIML339/Chess Project Results.md`. Edit there, then sync
+before committing:
+
+```bash
+cp "../Chess Project Results.md" RESULTS.md
+git add RESULTS.md && git commit -m "Update results log"
+```
+
 ## Class balance is intrinsic
 
 The 8.6x pawn-to-queen ratio is a property of chess, not a defect. There are
