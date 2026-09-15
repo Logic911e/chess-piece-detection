@@ -56,8 +56,10 @@ def assign_strata(
     """Group image filenames into evaluation strata.
 
     Returns a mapping of stratum name to image filenames. Every image lands in
-    "overall", plus one lighting stratum and one angle stratum where the
-    metadata allows.
+    "overall", plus a lighting, angle, or camera stratum wherever the metadata
+    supplies one. Synthetic renders carry angle and lighting; ChessReD carries
+    the handset model instead. Absent fields are simply skipped, so the same
+    function serves both datasets.
     """
     strata: dict[str, list[str]] = {"overall": []}
 
@@ -73,6 +75,11 @@ def assign_strata(
         mode = (row.get("lighting_mode") or "").strip()
         if mode:
             strata.setdefault(f"lighting_{mode}", []).append(name)
+
+        camera = (row.get("camera") or "").strip()
+        if camera:
+            slug = camera.lower().replace(" ", "-")
+            strata.setdefault(f"camera_{slug}", []).append(name)
 
         raw = (row.get("camera_angle") or "").strip()
         if raw:

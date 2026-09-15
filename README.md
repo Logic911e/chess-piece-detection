@@ -13,8 +13,9 @@ chess-detection/
   src/
     config.py          paths, class schema, training defaults
     download_data.py   fetch the Roboflow dataset
-    osf_download.py    resumable OSF file downloader
+    osf_download.py    resumable file downloader
     download_synth.py  fetch the chesscog rendered dataset from OSF
+    download_chessred.py  fetch and inspect the ChessReD real-photo dataset
     synth_to_yolo.py   convert chesscog annotations to YOLO format
     inspect_data.py    audit the data before training
     train_yolo.py      fine-tune YOLOv8
@@ -97,7 +98,41 @@ If `pieces[].box` turns out to be absent from the released renders, boxes must
 instead be derived from `corners` and `fen`, which is harder and approximate.
 `download_synth.py` reports this at the end of its run.
 
-### 2. Roboflow / real photographs (secondary)
+### 2. ChessReD (real photographs, for the domain gap)
+
+10,800 real smartphone photographs across 100 chess games, from Masouris and
+van Gemert (VISAPP 2024), on
+[4TU.ResearchData](https://doi.org/10.4121/99b5c721-280b-450b-b058-b2900b69a90f.v2)
+under CC BY-NC-SA 4.0 (non-commercial).
+
+Three handsets (iPhone 12, Huawei P40 Pro, Samsung Galaxy S8), angles from
+top-down to oblique, natural and artificial light. A 2,078-image subset called
+**ChessReD2K** additionally carries per-piece bounding boxes and board corners,
+split 1,442 train / 330 val / 306 test.
+
+That 306-image real test set is almost the same size as the 342-image synthetic
+test set, which makes the synthetic-to-real comparison unusually clean. The
+handset model also gives a third stratification axis alongside angle and
+lighting.
+
+```bash
+python src/download_chessred.py                      # annotations, then inspect
+python src/download_chessred.py --images --extract   # 4.68 GB
+python src/chessred_to_yolo.py --src data/raw/chessred \
+                               --dest data/processed/chessred2k
+```
+
+Two image archives are published. `chessred2k.zip` is **4.68 GB** and holds the
+2,078 box-annotated images; `chessred.zip` is **24.57 GB** and adds 8,722 more
+that carry no boxes and are unusable for detection. The default is the smaller
+one. Pass `--full` only if you specifically need the remainder.
+
+ChessReD orders its classes pawn, rook, knight, bishop, queen, king, whereas
+this project uses pawn, knight, bishop, rook, queen, king. The converter maps
+**by name**, and aborts if any name fails to match. Mapping by index would
+relabel every rook as a knight while still producing plausible metrics.
+
+### 3. Roboflow / other photographs (optional)
 
 Real photographs matter because the synthetic set is rendered. Only use
 datasets whose classes distinguish colour: a label reading just `bishop`

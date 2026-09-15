@@ -16,10 +16,20 @@ the evaluation and final reports.
 | Data audit | Done, zero errors |
 | YOLOv8 training on synthetic data | Done, 8 epochs |
 | Stratified evaluation on synthetic test set | Done |
-| Real-world image capture | Not started |
-| Domain gap measurement | Not started |
+| Real benchmark acquired (ChessReD2K) | Done, 2,078 images |
+| **Domain gap measured** | **Done: 0.9366 -> 0.1895** |
+| **Data efficiency curve** | **Done: 2 images double it, elbow at 25-50** |
+| Own photograph capture | Not started |
 | ResNet-50 baseline | Not started |
 | Live webcam demo | Not started |
+
+## Headline result
+
+A YOLOv8s detector trained only on Blender renders scores **mAP50-95 = 0.9366**
+on rendered test images and **0.1895** on 306 real smartphone photographs.
+
+That is an absolute drop of 0.7471, or **79.8% of performance lost**, with no
+change to the model or the task. The domain gap is not a marginal effect.
 
 ---
 
@@ -181,6 +191,182 @@ point rather than leaving it implicit.
 
 ---
 
+---
+
+## Experiment 2: synthetic-trained model on real photographs
+
+The 8-epoch model from Experiment 1, unchanged, evaluated on the ChessReD2K
+test split: 306 real smartphone photographs, 6,294 boxes, three handsets.
+
+| Metric | Synthetic | Real | Change |
+|---|---|---|---|
+| mAP50-95 | 0.9366 | **0.1895** | −79.8% |
+| mAP50 | 0.995 | 0.2687 | −73.0% |
+| Precision | 0.9975 | 0.2441 | −75.5% |
+| Recall | 0.9963 | 0.4036 | −59.5% |
+
+### F5. Rooks survive the domain shift; nothing else does
+
+Retention of synthetic performance, per class:
+
+| Class | Synthetic | Real | Retained |
+|---|---|---|---|
+| white-rook | 0.960 | 0.602 | **62.7%** |
+| black-rook | 0.940 | 0.557 | **59.3%** |
+| white-king | 0.943 | 0.329 | 34.9% |
+| black-king | 0.931 | 0.153 | 16.4% |
+| white-queen | 0.947 | 0.134 | 14.1% |
+| white-pawn | 0.933 | 0.123 | 13.2% |
+| black-pawn | 0.926 | 0.099 | 10.7% |
+| white-bishop | 0.951 | 0.088 | 9.3% |
+| black-knight | 0.914 | 0.066 | 7.2% |
+| white-knight | 0.919 | 0.045 | 5.0% |
+| black-queen | 0.940 | 0.042 | 4.5% |
+| black-bishop | 0.937 | 0.034 | **3.7%** |
+
+Rooks average 0.579 against 0.112 for everything else: **5.2x better**.
+
+The explanation is geometric. A rook is close to a plain cylinder with a
+crenellated top, and that silhouette is nearly identical whether modelled in
+Blender or moulded in plastic. Bishops, queens and knights are where chess set
+designs actually differ from one another, so the rendered form the model learned
+does not match the physical pieces it now sees.
+
+This reframes the domain gap. It is not a uniform degradation but a
+**shape-fidelity effect**: classes whose geometry is stable across chess sets
+transfer, and classes whose geometry is stylistic do not.
+
+### F6. The white advantage widens 5.6x on real images
+
+Mean white-over-black advantage rises from **+0.0110** on renders to **+0.0617**
+on photographs. Queens (+0.091) and kings (+0.177) show the largest gaps.
+
+Consistent with the F3 explanation but much stronger: real dark plastic under
+ordinary room lighting reveals far less surface detail than a Blender material
+under controlled lights. Knights are now the one exception where black scores
+higher, though both are near the floor and the difference is small.
+
+### F7. Localisation survives better than classification
+
+On real photographs recall (0.4036) exceeds precision (0.2441) by 0.16, having
+been balanced on renders (0.9963 vs 0.9975).
+
+The model still finds objects that look like chess pieces but assigns the wrong
+class to them. This is diagnostically useful: it points at the piece classifier
+rather than the detector as the thing the domain shift breaks, and suggests
+fine-tuning may recover a large share of the loss.
+
+### F8. The camera strata are confounded and must not be reported
+
+Apparent differences by handset (Huawei 0.2401, Samsung 0.1912, iPhone 0.1571)
+**cannot be attributed to the sensor.** The ChessReD2K test split contains three
+games, and each was photographed with exactly one camera:
+
+| Camera | Images | Game |
+|---|---|---|
+| Huawei P40 pro | 103 | 0 |
+| Apple iPhone 12 | 103 | 33 |
+| Samsung Galaxy S8 | 100 | 76 |
+
+Camera and game are therefore the same variable. Any difference could equally be
+the board, the piece set, the room, the lighting or the table. Reporting this as
+a sensor effect would be an error.
+
+This limits stratification on real data to nothing useful, which is a concrete
+argument for capturing my own photographs where angle and lighting can be varied
+deliberately while holding the set constant.
+
+---
+
+## Experiment 3: data efficiency of fine-tuning
+
+Starting from the synthetic-trained model, fine-tuned on N real photographs
+drawn from the ChessReD2K training split, evaluated each time on the same
+306-image test split. Sampling is stratified across games so small N draws
+distinct boards rather than consecutive moves of one position. Training
+validates on the val split; the test split is never seen during training.
+
+![Domain gap curve](domain_gap_curve.png)
+
+| N | mAP50-95 | mAP50 | Precision | Recall | % of full-data | Gap closed |
+|---|---|---|---|---|---|---|
+| 0 | 0.1895 | 0.2687 | 0.244 | 0.404 | 21.0% | 0% |
+| 2 | 0.3737 | 0.5517 | 0.508 | 0.606 | 41.4% | 24.7% |
+| 5 | 0.5374 | 0.7255 | 0.728 | 0.671 | 59.5% | 46.6% |
+| 10 | 0.6033 | 0.7674 | 0.663 | 0.785 | 66.8% | 55.4% |
+| 25 | 0.7675 | 0.9040 | 0.830 | 0.860 | 85.0% | 77.4% |
+| 50 | 0.8197 | 0.9467 | 0.855 | 0.902 | 90.8% | 84.3% |
+| 100 | 0.8711 | 0.9896 | 0.971 | 0.967 | 96.5% | 91.2% |
+| 250 | 0.8865 | 0.9939 | 0.987 | 0.981 | 98.2% | 93.3% |
+| 500 | 0.8935 | 0.9940 | 0.989 | 0.985 | 99.0% | 94.2% |
+| 1442 | 0.9029 | 0.9949 | 0.996 | 0.994 | 100% | 95.5% |
+
+"Gap closed" is measured against the 0.7471 that the domain shift cost.
+
+### F9. Two photographs double performance; the curve bends at 25 to 50
+
+Two real images take mAP50-95 from 0.1895 to 0.3737, a **97% relative gain from
+two examples**. This replicates Wölflein and Arandjelović, who used exactly two
+photographs to fine-tune their three-stage pipeline, and shows the effect is not
+specific to their architecture: it holds for an end-to-end detector too.
+
+The elbow sits between 25 and 100 images:
+
+- 25 images reach **85%** of full-data performance
+- 50 reach **91%**
+- 100 reach **96.5%**
+- the remaining 1,342 images add only **0.032**
+
+Marginal value per image collapses by three orders of magnitude across the
+curve, from 92 mAP points per 1,000 images at the start to 0.01 at the end.
+
+**Practical claim:** photographing your own chess set 25 to 50 times recovers
+most of what a 1,442-image dataset would. Collecting hundreds is close to
+wasted effort. For a system meant to be adapted to a user's own set, this is the
+result that matters.
+
+### F10. Fine-tuning fixes classification, exactly as F7 predicted
+
+F7 observed that on real photographs recall exceeded precision by 0.16, meaning
+the model located pieces but misclassified them. Fine-tuning closes that gap:
+
+| N | Recall − Precision |
+|---|---|
+| 0 | +0.159 |
+| 2 | +0.098 |
+| 25 | +0.030 |
+| 100 | −0.004 |
+| 1442 | −0.002 |
+
+By N=100 the asymmetry is gone. The domain shift damaged the classifier far more
+than the detector, and a modest number of real examples repairs it.
+
+### F11. The fine-tuned model matches the synthetic ceiling on mAP50
+
+| | mAP50-95 | mAP50 |
+|---|---|---|
+| Synthetic model, synthetic test | 0.9366 | 0.9950 |
+| Fine-tuned model, **real** test | 0.9029 | 0.9949 |
+
+At IoU 0.5 the real-domain model is indistinguishable from the synthetic model
+operating in its own domain. The residual 0.034 gap in mAP50-95 is entirely
+about strict box localisation, not detection or classification. Real photographs
+have genuinely less certain object boundaries than renders, where the ground
+truth came from exact mesh geometry.
+
+### Caveat: single-seed variance
+
+N=10 was run twice and returned 0.6468 and 0.6033, a spread of 0.044. MPS lacks
+deterministic implementations for several scatter operations, so `deterministic=True`
+degrades to warn-only and runs are not exactly reproducible.
+
+Differences smaller than roughly 0.05 on this curve should not be treated as
+meaningful. The shape is robust; individual points are not. Repeating the sweep
+across three seeds and reporting variance would fix this and is the single most
+valuable follow-up.
+
+---
+
 ## Caveats
 
 Strata contain 104 to 176 images and the differences are around 0.01. Taken
@@ -227,3 +413,6 @@ difference from hand-annotated datasets and worth disclosing.
 5. Live webcam demo.
 6. Optionally resume training to 50 epochs. Low priority: expected gain is
    roughly +0.02 mAP50-95, and it is not where the contribution lies.
+
+
+Have a look at Kaggle.
