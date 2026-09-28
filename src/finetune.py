@@ -239,6 +239,12 @@ def main() -> int:
                    help="Number of real images to fine-tune on (-1 = all)")
     p.add_argument("--sweep", action="store_true",
                    help=f"Run the full curve: {DEFAULT_SWEEP}")
+    p.add_argument("--points", type=str, default=None,
+                   help="Comma-separated N values, e.g. 2,5,10,25,50")
+    p.add_argument("--seeds", type=str, default=None,
+                   help="Comma-separated seeds, e.g. 42,43,44. Each seed "
+                        "changes which images are sampled AND the training "
+                        "init, so the spread captures both sources of variance.")
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--batch", type=int, default=8)
     p.add_argument("--imgsz", type=int, default=config.IMG_SIZE)
@@ -260,12 +266,17 @@ def main() -> int:
     if not meta.is_file():
         sys.exit(f"No metadata at {meta}")
 
-    if args.sweep:
+    if args.points:
+        points = [int(v) for v in args.points.split(",") if v.strip()]
+    elif args.sweep:
         points = list(DEFAULT_SWEEP)
     elif args.n_images is not None:
         points = [args.n_images]
     else:
-        sys.exit("Pass --n-images N or --sweep")
+        sys.exit("Pass --n-images N, --points A,B,C, or --sweep")
+
+    seeds = ([int(v) for v in args.seeds.split(",") if v.strip()]
+             if args.seeds else [args.seed])
 
     with meta.open() as fh:
         meta_rows = list(csv.DictReader(fh))
@@ -274,56 +285,99 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     results: list[dict[str, Any]] = []
 
-    for n in points:
-        try:
-            row = run_point(args, n, meta_rows, class_names)
-        except Exception as exc:
-            print(f"[error] N={n}: {exc}")
-            continue
-        results.append(row)
-        print(f"  -> mAP50-95 {row['mAP50-95']:.4f}   mAP50 {row['mAP50']:.4f}"
-              f"   P {row['precision']:.4f}   R {row['recall']:.4f}")
+    total_runs = len(points) * len(seeds)
+    done = 0
 
-        # Merge with anything already on disk, so separate invocations
-        # accumulate into one curve instead of overwriting each other, and
-        # write after every point so a crash never loses completed work.
-        fields = ["n_images", "epochs", "games_covered", "run",
-                  "mAP50-95", "mAP50", "precision", "recall"]
-        merged: dict[int, dict[str, Any]] = {}
-        if args.out.is_file():
-            with args.out.open() as fh:
-                for old in csv.DictReader(fh):
-                    try:
-                        merged[int(old["n_images"])] = old
-                    except (KeyError, ValueError):
-                        continue
-        for r in results:
-            merged[int(r["n_images"])] = r
+    for seed in seeds:
+        args.seed = seed
+        for n in points:
+            done += 1
+            if len(seeds) > 1:
+                print(f"\n### run {done}/{total_runs}  (seed {seed}) ###")
+            try:
+                row = run_point(args, n, meta_rows, class_names)
+            except Exception as exc:
+                print(f"[error] N={n} seed={seed}: {exc}")
+                continue
+            row["seed"] = seed
+            results.append(row)
+            print(f"  -> mAP50-95 {row['mAP50-95']:.4f}   mAP50 {row['mAP50']:.4f}"
+                  f"   P {row['precision']:.4f}   R {row['recall']:.4f}")
 
-        with args.out.open("w", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
-            w.writeheader()
-            for key in sorted(merged, key=lambda k: (k < 0, k)):
-                w.writerow(merged[key])
+            # Merge with anything already on disk, keyed by (N, seed), so
+            # separate invocations accumulate instead of overwriting and a
+            # crash never loses completed work.
+            fields = ["n_images", "seed", "epochs", "games_covered", "run",
+                      "mAP50-95", "mAP50", "precision", "recall"]
+            merged: dict[tuple[int, int], dict[str, Any]] = {}
+            if args.out.is_file():
+                with args.out.open() as fh:
+                    for old in csv.DictReader(fh):
+                        try:
+                            key = (int(old["n_images"]),
+                                   int(old.get("seed") or config.SEED))
+                            merged[key] = old
+                        except (KeyError, ValueError):
+                            continue
+            for r in results:
+                merged[(int(r["n_images"]), int(r.get("seed", config.SEED)))] = r
+
+            with args.out.open("w", newline="") as fh:
+                w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
+                w.writeheader()
+                for key in sorted(merged, key=lambda k: (k[0] < 0, k[0], k[1])):
+                    w.writerow(merged[key])
 
     if not results:
         return 1
 
+    # Summarise from the file, so points from earlier invocations are included.
+    from statistics import mean, stdev
+
+    by_n: dict[int, list[float]] = defaultdict(list)
+    with args.out.open() as fh:
+        for row in csv.DictReader(fh):
+            try:
+                by_n[int(row["n_images"])].append(float(row["mAP50-95"]))
+            except (KeyError, ValueError):
+                continue
+
     print(f"\n{'=' * 62}\nDATA EFFICIENCY CURVE\n{'=' * 62}")
-    print(f"{'N real images':>14} {'mAP50-95':>10} {'mAP50':>8} "
-          f"{'prec':>8} {'recall':>8}")
-    print("-" * 52)
-    base = results[0]["mAP50-95"] if results[0]["n_images"] == 0 else None
-    for r in results:
-        print(f"{r['n_images']:>14} {r['mAP50-95']:>10.4f} {r['mAP50']:>8.4f}"
-              f" {r['precision']:>8.4f} {r['recall']:>8.4f}")
-    if base and len(results) > 1:
-        best = max(results[1:], key=lambda r: r["mAP50-95"])
-        print(f"\n  zero-shot: {base:.4f}")
-        print(f"  best after fine-tuning: {best['mAP50-95']:.4f} "
-              f"at N={best['n_images']}")
-        if base > 0:
-            print(f"  improvement: {best['mAP50-95'] / base:.1f}x")
+    multi = any(len(v) > 1 for v in by_n.values())
+    if multi:
+        print(f"{'N':>8} {'seeds':>6} {'mean':>9} {'std':>8} "
+              f"{'min':>8} {'max':>8} {'spread':>8}")
+        print("-" * 56)
+    else:
+        print(f"{'N':>8} {'mAP50-95':>10}")
+        print("-" * 20)
+
+    for n in sorted(by_n, key=lambda k: (k < 0, k)):
+        vals = by_n[n]
+        if multi:
+            sd = stdev(vals) if len(vals) > 1 else 0.0
+            print(f"{n:>8} {len(vals):>6} {mean(vals):>9.4f} {sd:>8.4f} "
+                  f"{min(vals):>8.4f} {max(vals):>8.4f} "
+                  f"{max(vals)-min(vals):>8.4f}")
+        else:
+            print(f"{n:>8} {vals[0]:>10.4f}")
+
+    if 0 in by_n:
+        base = mean(by_n[0])
+        rest = {n: mean(v) for n, v in by_n.items() if n != 0}
+        if rest:
+            best_n = max(rest, key=rest.get)
+            print(f"\n  zero-shot: {base:.4f}")
+            print(f"  best mean: {rest[best_n]:.4f} at N={best_n}")
+            if base > 0:
+                print(f"  improvement: {rest[best_n] / base:.1f}x")
+
+    if multi:
+        spreads = [max(v) - min(v) for v in by_n.values() if len(v) > 1]
+        if spreads:
+            print(f"\n  largest spread across seeds: {max(spreads):.4f}")
+            print("  differences smaller than this should not be treated")
+            print("  as meaningful.")
 
     print(f"\nWrote {args.out}")
     return 0
