@@ -4,7 +4,8 @@
 # Data and model artefacts
 data/
 runs/
-reports/
+reports/*
+!reports/*.csv
 *.pt
 *.pth
 

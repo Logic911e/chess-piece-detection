@@ -1,4 +1,4 @@
-# Progress and Results Log
+ # Progress and Results Log
 
 Real-time chess piece detection with YOLOv8: a domain gap analysis.
 AIML339, Anjola Sigbeku (300665808), Victoria University of Wellington.
@@ -19,6 +19,7 @@ the evaluation and final reports.
 | Real benchmark acquired (ChessReD2K) | Done, 2,078 images |
 | **Domain gap measured** | **Done: 0.9366 -> 0.1895** |
 | **Data efficiency curve** | **Done: 2 images double it, elbow at 25-50** |
+| **Multi-seed variance (N<=50)** | **Done: 3 seeds, spread collapses by N=50** |
 | Own photograph capture | Not started |
 | ResNet-50 baseline | Not started |
 | Live webcam demo | Not started |
@@ -288,37 +289,43 @@ validates on the val split; the test split is never seen during training.
 
 ![Domain gap curve](domain_gap_curve.png)
 
-| N | mAP50-95 | mAP50 | Precision | Recall | % of full-data | Gap closed |
-|---|---|---|---|---|---|---|
-| 0 | 0.1895 | 0.2687 | 0.244 | 0.404 | 21.0% | 0% |
-| 2 | 0.3737 | 0.5517 | 0.508 | 0.606 | 41.4% | 24.7% |
-| 5 | 0.5374 | 0.7255 | 0.728 | 0.671 | 59.5% | 46.6% |
-| 10 | 0.6033 | 0.7674 | 0.663 | 0.785 | 66.8% | 55.4% |
-| 25 | 0.7675 | 0.9040 | 0.830 | 0.860 | 85.0% | 77.4% |
-| 50 | 0.8197 | 0.9467 | 0.855 | 0.902 | 90.8% | 84.3% |
-| 100 | 0.8711 | 0.9896 | 0.971 | 0.967 | 96.5% | 91.2% |
-| 250 | 0.8865 | 0.9939 | 0.987 | 0.981 | 98.2% | 93.3% |
-| 500 | 0.8935 | 0.9940 | 0.989 | 0.985 | 99.0% | 94.2% |
-| 1442 | 0.9029 | 0.9949 | 0.996 | 0.994 | 100% | 95.5% |
+All points up to N=50 are means over **three seeds** (42, 43, 44). Each seed
+changes both which images are drawn and the training initialisation, so the
+spread covers both sources of variance. Points from N=100 up are single runs.
+
+| N | mAP50-95 | sd | mAP50 | Precision | Recall | % of full-data | Gap closed | seeds |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 0.1895 | -- | 0.2687 | 0.244 | 0.404 | 21.0% | 0% | 1 |
+| 2 | 0.4330 | 0.0549 | 0.5987 | 0.532 | 0.644 | 48.0% | 32.6% | 3 |
+| 5 | 0.5673 | 0.0630 | 0.7466 | 0.661 | 0.764 | 62.8% | 50.6% | 3 |
+| 10 | 0.6227 | 0.0476 | 0.7965 | 0.707 | 0.801 | 69.0% | 58.0% | 3 |
+| 25 | 0.7405 | 0.0324 | 0.8765 | 0.781 | 0.854 | 82.0% | 73.8% | 3 |
+| 50 | 0.8262 | 0.0069 | 0.9580 | 0.892 | 0.900 | 91.5% | 85.2% | 3 |
+| 100 | 0.8711 | -- | 0.9896 | 0.971 | 0.967 | 96.5% | 91.2% | 1 |
+| 250 | 0.8865 | -- | 0.9939 | 0.987 | 0.981 | 98.2% | 93.3% | 1 |
+| 500 | 0.8935 | -- | 0.9940 | 0.989 | 0.985 | 99.0% | 94.2% | 1 |
+| 1442 | 0.9029 | -- | 0.9949 | 0.996 | 0.994 | 100% | 95.5% | 1 |
 
 "Gap closed" is measured against the 0.7471 that the domain shift cost.
 
 ### F9. Two photographs double performance; the curve bends at 25 to 50
 
-Two real images take mAP50-95 from 0.1895 to 0.3737, a **97% relative gain from
-two examples**. This replicates Wölflein and Arandjelović, who used exactly two
-photographs to fine-tune their three-stage pipeline, and shows the effect is not
-specific to their architecture: it holds for an end-to-end detector too.
+Two real images take mAP50-95 from 0.1895 to **0.4330 ± 0.0549**, a 2.3×
+improvement from two examples. The claim survives the seed spread: the worst of
+three draws still reached 0.3737, a 1.97× gain, and the best reached 0.4823.
+This replicates Wölflein and Arandjelović, who used exactly two photographs to
+fine-tune their three-stage pipeline, and shows the effect is not specific to
+their architecture: it holds for an end-to-end detector too.
 
 The elbow sits between 25 and 100 images:
 
-- 25 images reach **85%** of full-data performance
-- 50 reach **91%**
+- 25 images reach **82%** of full-data performance
+- 50 reach **91.5%**
 - 100 reach **96.5%**
 - the remaining 1,342 images add only **0.032**
 
-Marginal value per image collapses by three orders of magnitude across the
-curve, from 92 mAP points per 1,000 images at the start to 0.01 at the end.
+Marginal value per image collapses by four orders of magnitude across the
+curve, from 122 mAP points per 1,000 images at the start to 0.01 at the end.
 
 **Practical claim:** photographing your own chess set 25 to 50 times recovers
 most of what a 1,442-image dataset would. Collecting hundreds is close to
@@ -333,8 +340,9 @@ the model located pieces but misclassified them. Fine-tuning closes that gap:
 | N | Recall − Precision |
 |---|---|
 | 0 | +0.159 |
-| 2 | +0.098 |
-| 25 | +0.030 |
+| 2 | +0.112 |
+| 25 | +0.073 |
+| 50 | +0.008 |
 | 100 | −0.004 |
 | 1442 | −0.002 |
 
@@ -354,16 +362,47 @@ about strict box localisation, not detection or classification. Real photographs
 have genuinely less certain object boundaries than renders, where the ground
 truth came from exact mesh geometry.
 
-### Caveat: single-seed variance
+### F12. Which images you pick matters as much as how many, until about N=50
 
-N=10 was run twice and returned 0.6468 and 0.6033, a spread of 0.044. MPS lacks
-deterministic implementations for several scatter operations, so `deterministic=True`
-degrades to warn-only and runs are not exactly reproducible.
+The sweep was repeated across seeds 42, 43 and 44. Each seed redraws the sample
+*and* reseeds training, so the spread below is the combined effect of both.
 
-Differences smaller than roughly 0.05 on this curve should not be treated as
-meaningful. The shape is robust; individual points are not. Repeating the sweep
-across three seeds and reporting variance would fix this and is the single most
-valuable follow-up.
+| N | mean | sd | min | max | spread |
+|---|---|---|---|---|---|
+| 2 | 0.4330 | 0.0549 | 0.3737 | 0.4823 | **0.1085** |
+| 5 | 0.5673 | 0.0630 | 0.5248 | 0.6397 | **0.1149** |
+| 10 | 0.6227 | 0.0476 | 0.5879 | 0.6769 | 0.0890 |
+| 25 | 0.7405 | 0.0324 | 0.7046 | 0.7675 | 0.0629 |
+| 50 | 0.8262 | 0.0069 | 0.8197 | 0.8334 | **0.0137** |
+
+Spread falls by a factor of eight between N=5 and N=50, and standard deviation
+by a factor of nine. At N=2 the spread is 0.109, which is 45% of the entire
+gain those two images produce: the result is dominated by *which* two boards
+happen to be drawn. By N=50 the spread is 0.014, smaller than the gap between
+adjacent points on the curve.
+
+This is a more useful statement than the raw curve on its own. It says the
+practical recommendation is not merely "25 to 50 photographs is enough" but
+"below about 25 photographs your result depends heavily on luck in what you
+happened to photograph; above it you get a dependable outcome." For someone
+adapting this system to their own chess set, the reliability threshold matters
+as much as the performance threshold.
+
+It also bounds what can be read off the curve. Differences smaller than the
+local spread are not meaningful, and that threshold is **N-dependent**: roughly
+0.11 at N=2–5, 0.06 at N=25, 0.014 at N=50. The earlier estimate of a flat
+±0.05 everywhere was too optimistic at small N and too conservative at large N.
+
+Two sources feed this. The sampling draw is the larger one and is intrinsic to
+the question. The smaller one is hardware: Apple's MPS backend lacks
+deterministic implementations of `scatter_reduce` and `index_put_with_accumulate`,
+so `deterministic=True` degrades to warn-only and even a fixed seed is not
+bit-reproducible. The two cannot be separated without re-running a fixed sample
+under several training seeds, which is a cheap follow-up if it is worth doing.
+
+Single-seed points remain at N=100 and above. They are drawn hollow on the
+curve. Since spread is already 0.014 at N=50 and still falling, the variance
+there is likely negligible, but it has not been measured.
 
 ---
 
@@ -401,16 +440,23 @@ difference from hand-annotated datasets and worth disclosing.
 
 ## Next steps
 
-1. **Capture real chessboard photographs.** The domain gap cannot be measured
-   without them. Vary lighting, angle, and chess set. This is the highest-value
-   remaining work.
-2. **Evaluate the synthetic-trained model on those real images.** The drop from
-   0.9366 is the project's headline result.
-3. **Fine-tune on a small number of real images** and re-measure, replicating
-   Wölflein's 9.33 → 0.11 finding with an end-to-end detector rather than a
-   three-stage pipeline.
-4. ResNet-50 classification baseline for comparison.
-5. Live webcam demo.
+Items 1 to 3 of the original list (capture real photographs, measure the gap,
+fine-tune and re-measure) are done, using ChessReD2K rather than self-captured
+images. What remains:
+
+1. **Capture my own chessboard photographs.** No longer needed to measure the
+   gap, but still the only way to test the angle and lighting findings (F1, F8)
+   on real images with the chess set held constant, and the only way to show the
+   practical claim on a set the model has never seen.
+2. **ResNet-50 classification baseline** for comparison. Outstanding from the
+   design report; worth confirming with the supervisor that it is still in scope
+   given the project has turned into a detection study.
+3. **Live webcam demo.**
+4. **Evaluation report**, correcting the design report figures in the table
+   above.
+5. Optionally, separate sampling variance from MPS non-determinism by rerunning
+   one fixed sample under several training seeds (F12). Cheap, and it would
+   sharpen the claim.
 6. Optionally resume training to 50 epochs. Low priority: expected gain is
    roughly +0.02 mAP50-95, and it is not where the contribution lies.
 

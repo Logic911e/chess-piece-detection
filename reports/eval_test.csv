@@ -1,0 +1,5 @@
+stratum,n_images,mAP50-95,mAP50,precision,recall
+overall,306,0.1895,0.2687,0.2441,0.4036
+camera_apple-iphone-12,103,0.1571,0.2210,0.1558,0.3922
+camera_huawei-p40-pro,103,0.2401,0.3434,0.3048,0.4964
+camera_samsung-galaxy-s8,100,0.1912,0.2669,0.2124,0.3994
