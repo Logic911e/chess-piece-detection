@@ -1,8 +1,8 @@
 # Chess Piece Detection (AIML339)
 
-Real-time chess piece detection with YOLOv8, with a ResNet-50 classifier as a
+Chess piece detection with YOLOv8, with a ResNet-50 classifier as a
 baseline. The research question is the domain gap: how much performance is lost
-when a model trained on clean dataset images meets real webcam conditions.
+when a model trained on synthetic rendered images meets real smartphone photographs.
 
 Anjola Sigbeku, 300665808, Victoria University of Wellington.
 
@@ -11,19 +11,26 @@ Anjola Sigbeku, 300665808, Victoria University of Wellington.
 ```
 chess-detection/
   src/
-    config.py          paths, class schema, training defaults
-    download_data.py   fetch the Roboflow dataset
-    osf_download.py    resumable file downloader
-    download_synth.py  fetch the chesscog rendered dataset from OSF
-    download_chessred.py  fetch and inspect the ChessReD real-photo dataset
-    synth_to_yolo.py   convert chesscog annotations to YOLO format
-    inspect_data.py    audit the data before training
-    train_yolo.py      fine-tune YOLOv8
-    evaluate.py        evaluate by camera angle and lighting condition
+    config.py             paths, class schema, training defaults
+    osf_download.py       resumable file downloader
+    download_synth.py     fetch the chesscog rendered dataset from OSF
+    download_chessred.py  fetch and inspect ChessReD real-photo dataset
+    synth_to_yolo.py      convert chesscog annotations to YOLO format
+    chessred_to_yolo.py   convert ChessReD annotations to YOLO format
+    inspect_data.py       audit the data before training
+    train_yolo.py         fine-tune YOLOv8
+    finetune.py           fine-tune on N real photographs, sweep the curve
+    evaluate.py           evaluate by camera angle and lighting condition
+    make_crops.py         cut per-piece crops for the ResNet-50 baseline
+    resnet_baseline.py    train and evaluate the ResNet-50 classifier
+    compare_predictions.py  visualise side-by-side predictions
+    plot_curve.py         plot the fine-tuning data efficiency curve
+    demo.py               live webcam detection demo
   data/
     raw/               datasets exactly as downloaded
     interim/           after class remapping
     processed/         final YOLO-ready dataset
+    crops/             per-piece crops for ResNet-50 baseline
   notebooks/           Colab training notebooks
   reports/             audit output
   runs/                training checkpoints and results
@@ -35,28 +42,7 @@ chess-detection/
 pip install -r requirements.txt
 ```
 
-### Roboflow API key
-
-The free **Public** plan is enough. No credit card is required, and a free key
-can download public Universe datasets.
-
-1. Sign up at [roboflow.com](https://roboflow.com)
-2. Open your workspace, then **Settings -> API Keys**
-3. Copy the key
-
-Make it available to the scripts in one of two ways:
-
-```bash
-export ROBOFLOW_API_KEY="your_key_here"
-```
-
-or create a `.env` file in the repo root:
-
-```
-ROBOFLOW_API_KEY=your_key_here
-```
-
-Do not commit either. The key is private to your account.
+No API keys are required for the primary data sources.
 
 ## Data sources
 
@@ -132,15 +118,6 @@ this project uses pawn, knight, bishop, rook, queen, king. The converter maps
 **by name**, and aborts if any name fails to match. Mapping by index would
 relabel every rook as a knight while still producing plausible metrics.
 
-### 3. Roboflow / other photographs (optional)
-
-Real photographs matter because the synthetic set is rendered. Only use
-datasets whose classes distinguish colour: a label reading just `bishop`
-cannot produce a FEN string and will corrupt the label space if merged.
-
-```bash
-python src/download_data.py
-```
 
 ## Workflow
 
@@ -165,20 +142,6 @@ one king, so per-class precision and recall matter more than aggregate mAP.
 
 The usual route is `notebooks/train_colab.ipynb`, which runs the whole pipeline
 on a free Colab T4: clone, download, convert, audit, train, evaluate.
-
-This repository is private, so Colab needs a token to open and clone it.
-
-**Opening the notebook:** in Colab, *File -> Open notebook -> GitHub*, tick
-**Include private repos**, and authorise when prompted. Alternatively upload
-`notebooks/train_colab.ipynb` directly.
-
-**Cloning inside the notebook:** create a fine-grained personal access token at
-<https://github.com/settings/personal-access-tokens/new>, scoped to this
-repository only with **Contents: Read-only**. In Colab, click the key icon in
-the sidebar, add it as a secret named `GITHUB_TOKEN`, and enable notebook
-access. The token stays in Colab Secrets, never in the notebook, and the clone
-cell redacts it from any error output and strips it from the git remote
-afterwards.
 
 The notebook downloads the dataset fresh each session rather than storing it on
 Drive. At about 7 GB extracted it would consume most of a free 15 GB Drive
@@ -222,14 +185,7 @@ This is what turns "performance dropped on real images" into a statement about
 
 ## Results log
 
-Findings live in `RESULTS.md`. That file is a **mirror**: the working copy is
-the Obsidian note at `AIML339/Chess Project Results.md`. Edit there, then sync
-before committing:
-
-```bash
-cp "../Chess Project Results.md" RESULTS.md
-git add RESULTS.md && git commit -m "Update results log"
-```
+Findings and experimental results live in `RESULTS.md`.
 
 ## Class balance is intrinsic
 
@@ -241,24 +197,23 @@ signature of positions drawn from real games.
 Do not rebalance it. Report per-class AP so rare-class performance is visible
 instead of hidden behind an aggregate dominated by pawns.
 
-## Note on class count
+## Class count
 
-The design report states 13 classes while describing 12. Six piece types across
-two colours is 12. Some public chess datasets add a thirteenth `board` class.
-`inspect_data.py` reports what the downloaded data actually contains, so the
-report should be corrected to match the real schema once the audit has run.
+The project uses 12 classes: six piece types (pawn, knight, bishop, rook, queen, king)
+across two colours (white, black). The chesscog and ChessReD datasets both confirmed
+12 classes with zero errors on conversion. The design report incorrectly stated 13 classes.
 
 ## Status
 
 - [x] Project scaffold and configuration
-- [x] Dataset download script
-- [x] Dataset audit, verified against synthetic data with planted defects
-- [x] chesscog render to YOLO converter, verified by exact round-trip
-- [x] Dataset downloaded and converted: 4,888 images, 104,893 boxes, 0 errors
-- [x] YOLOv8 training script with per-epoch checkpointing
-- [x] Stratified evaluation by camera angle and lighting
-- [ ] Run training and record baseline results
-- [ ] ResNet-50 baseline
-- [ ] Self-captured real-world test set
-- [ ] Evaluation and domain gap analysis
-- [ ] Live webcam demo
+- [x] Dataset download and conversion: 4,888 synthetic images, 104,893 boxes, 0 errors
+- [x] Dataset audit verified by king-count invariant
+- [x] YOLOv8s training (8 epochs): 0.9366 mAP50-95 on synthetic test set
+- [x] Stratified evaluation by camera angle and lighting condition
+- [x] Domain gap measured: 0.1895 mAP50-95 on real photographs (79.8% drop)
+- [x] Fine-tuning data efficiency curve (N=2 to 1442, seeds 42/43/44 for N≤50)
+- [x] ChessReD2K per-piece crops extracted (43,149 crops across all splits)
+- [x] ResNet-50 baseline trained: 99.89% top-1 accuracy on test crops
+- [x] Live webcam demo script implemented
+- [ ] Webcam demo tested against a live chessboard
+- [ ] Own photographs for angle/lighting analysis with fixed chess set

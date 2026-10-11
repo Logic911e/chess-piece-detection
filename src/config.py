@@ -39,39 +39,6 @@ def ensure_dirs() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Dataset source
-# ---------------------------------------------------------------------------
-
-# Roboflow Universe project coordinates for the Chess Pieces dataset.
-ROBOFLOW_WORKSPACE = "joseph-nelson"
-ROBOFLOW_PROJECT = "chess-pieces-new"
-ROBOFLOW_VERSION = 24
-ROBOFLOW_FORMAT = "yolov8"
-
-# Read from the environment so the key never lands in source control.
-# Set it with:  export ROBOFLOW_API_KEY="..."   (or put it in a .env file)
-ROBOFLOW_API_KEY_ENV = "ROBOFLOW_API_KEY"
-
-
-def get_roboflow_key() -> str | None:
-    """Return the Roboflow API key, loading a .env file if one is present."""
-    key = os.environ.get(ROBOFLOW_API_KEY_ENV)
-    if key:
-        return key
-
-    env_file = REPO_ROOT / ".env"
-    if env_file.is_file():
-        for line in env_file.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            name, _, value = line.partition("=")
-            if name.strip() == ROBOFLOW_API_KEY_ENV:
-                return value.strip().strip("\"'")
-    return None
-
-
-# ---------------------------------------------------------------------------
 # Class schema
 # ---------------------------------------------------------------------------
 
