@@ -20,9 +20,10 @@ the evaluation and final reports.
 | **Domain gap measured** | **Done: 0.9366 -> 0.1895** |
 | **Data efficiency curve** | **Done: 2 images double it, elbow at 25-50** |
 | **Multi-seed variance (N<=50)** | **Done: 3 seeds, spread collapses by N=50** |
+| ResNet-50 baseline | Done: 99.89% top-1 on 6,294 test crops |
+| Final report | Done |
+| Live webcam demo | Script written, not evaluated |
 | Own photograph capture | Not started |
-| ResNet-50 baseline | Not started |
-| Live webcam demo | Not started |
 
 ## Headline result
 
@@ -406,6 +407,64 @@ there is likely negligible, but it has not been measured.
 
 ---
 
+## Experiment 4: ResNet-50 classification baseline
+
+This baseline separates classification from localisation. The ResNet-50 sees
+one ground-truth crop at a time, so it never has to find a piece. Its accuracy
+is an upper bound on what the classifier can do alone. It is not comparable to
+the detector's mAP, because the two models answer different questions.
+
+### Setup
+
+| Parameter | Value |
+|---|---|
+| Crops | Cut from ChessReD2K with ground-truth boxes (`make_crops.py`), letterboxed onto a 128x128 canvas |
+| Train / test crops | 30,723 / 6,294 |
+| Initialisation | ImageNet-pretrained ResNet-50 |
+| Phase 1 | Head only, 5 epochs |
+| Phase 2 | Full network, 10 epochs, starting from the phase 1 checkpoint |
+| Class weights | Inverse frequency (pawn-to-queen ratio is 8.6:1) |
+| Seed and device | 42, Apple MPS (not bit-reproducible) |
+
+### Results on the test crops
+
+| Phase | Top-1 | Balanced accuracy | Macro F1 |
+|---|---|---|---|
+| Head only | 0.9984 | 0.9976 | 0.9974 |
+| Full fine-tune | **0.9989** | **0.9983** | 0.9982 |
+
+Seven of twelve classes reach 100% recall. The weakest is black-queen at
+98.7% (157 test crops). Piece type alone is 99.89% accurate and colour alone
+99.98%. The full output is in `runs/resnet/phase2-seed42/report.json`, with the
+confusion matrix in `confusion_test.csv`.
+
+### F13. Classification capacity is not the limit
+
+Given a perfect crop, the classifier almost never errs, so real pieces are not
+hard to name. That points at the detector, which learned its classes from
+renders, as the source of the zero-shot loss. It fits F7 (recall above
+precision) and F10 (fine-tuning closes that gap). The baseline does not test
+this directly.
+
+What this does not show: it is one seed, the crops are ground truth, and the
+test crops come from the same three games as the detector's test set. It says
+nothing about box placement, which is where the leftover 0.034 mAP50-95 sits
+(F11).
+
+## Where each number comes from
+
+| Result | File |
+|---|---|
+| Synthetic-model scores on real photos (zero-shot) | `reports/eval_test.csv` (camera rows are confounded, see F8) |
+| Fine-tuning sweep, one row per run, N = 0 is zero-shot | `reports/finetune_sweep.csv`, per-run output in `runs/finetune/` |
+| Fine-tuning curve figure | `src/plot_curve.py` |
+| Side-by-side example predictions | `src/compare_predictions.py` (defaults to the newest fine-tuned run) |
+| ResNet-50 baseline | `src/resnet_baseline.py`, output in `runs/resnet/` |
+| Data audit and king-count check | `src/inspect_data.py`, `reports/audit.json`, `reports/audit_chessred.json` |
+
+Training time and inference latency were not recorded, so neither appears
+anywhere in this log.
+
 ## Caveats
 
 Strata contain 104 to 176 images and the differences are around 0.01. Taken
@@ -440,25 +499,17 @@ difference from hand-annotated datasets and worth disclosing.
 
 ## Next steps
 
-Items 1 to 3 of the original list (capture real photographs, measure the gap,
-fine-tune and re-measure) are done, using ChessReD2K rather than self-captured
-images. What remains:
+The planned detection work and the ResNet-50 baseline are done. What remains:
 
-1. **Capture my own chessboard photographs.** No longer needed to measure the
-   gap, but still the only way to test the angle and lighting findings (F1, F8)
-   on real images with the chess set held constant, and the only way to show the
+1. **Capture my own chessboard photographs.** ChessReD2K covers the domain gap,
+   but only my own photos can test the angle and lighting findings (F1, F8) on
+   real images with the chess set held constant. They would also show the
    practical claim on a set the model has never seen.
-2. **ResNet-50 classification baseline** for comparison. Outstanding from the
-   design report; worth confirming with the supervisor that it is still in scope
-   given the project has turned into a detection study.
-3. **Live webcam demo.**
-4. **Evaluation report**, correcting the design report figures in the table
-   above.
-5. Optionally, separate sampling variance from MPS non-determinism by rerunning
-   one fixed sample under several training seeds (F12). Cheap, and it would
+2. **Evaluate the webcam demo.** `src/demo.py` runs, but it has not been tested
+   against a live board.
+3. Optionally, separate sampling variance from MPS non-determinism by rerunning
+   one fixed sample under several training seeds (F12). It is cheap and would
    sharpen the claim.
-6. Optionally resume training to 50 epochs. Low priority: expected gain is
-   roughly +0.02 mAP50-95, and it is not where the contribution lies.
-
-
-Have a look at Kaggle.
+4. Optionally resume base training to 50 epochs. The expected gain is roughly
+   +0.02 mAP50-95. The zero-shot baseline also comes from the 8-epoch model, so
+   the 79.8% drop may be slightly overstated.

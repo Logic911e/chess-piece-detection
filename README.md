@@ -97,9 +97,9 @@ top-down to oblique, natural and artificial light. A 2,078-image subset called
 split 1,442 train / 330 val / 306 test.
 
 That 306-image real test set is almost the same size as the 342-image synthetic
-test set, which makes the synthetic-to-real comparison unusually clean. The
-handset model also gives a third stratification axis alongside angle and
-lighting.
+test set, which makes the synthetic-to-real comparison unusually clean. In the
+test split each handset photographed exactly one game, so camera and game are
+the same variable and no camera comparison is reported (see F8 in `RESULTS.md`).
 
 ```bash
 python src/download_chessred.py                      # annotations, then inspect
@@ -157,9 +157,11 @@ python src/evaluate.py --weights runs/<run>/weights/best.pt
 ```
 
 Defaults to `yolov8s` for 50 epochs, which fits inside one free Colab session
-on 4,400 images. `yolov8m` is roughly 3x slower and will usually be reclaimed
-partway through; use `--resume` if you try it anyway. Checkpoints are written
-every epoch, so an interruption costs one epoch rather than the whole run.
+on 4,400 images. The reported results come from an 8-epoch run, because Colab
+reclaimed the session. The per-epoch checkpoint in `runs/best.pt` was kept.
+`yolov8m` is roughly 3x slower and will usually be reclaimed partway through;
+use `--resume` if you try it anyway. Checkpoints are written every epoch, so an
+interruption costs one epoch rather than the whole run.
 
 On Colab, mount Drive and write runs there so weights outlive the session:
 
@@ -182,6 +184,21 @@ are computed identically to the headline metric rather than reimplemented.
 
 This is what turns "performance dropped on real images" into a statement about
 *which conditions* break the model.
+
+## Results at a glance
+
+| Experiment | Result |
+|---|---|
+| YOLOv8s on rendered test images | 0.9366 mAP50-95 |
+| Same model on 306 real photographs (zero-shot) | 0.189 mAP50-95, a 79.8% drop |
+| Fine-tuned on 2 real photographs | 0.433 (mean of 3 seeds) |
+| Fine-tuned on 25 / 50 real photographs | 0.741 / 0.826 (3 seeds each) |
+| Fine-tuned on all 1,442 real photographs | 0.903 (one run) |
+| ResNet-50 on ground-truth crops | 99.89% top-1 (upper bound on classification) |
+
+Caveats: three seeds up to N = 50 and single runs above, 8 of 50 planned base
+epochs, and no training time or inference latency measured. `RESULTS.md` has the
+details and the file behind each number.
 
 ## Results log
 
@@ -214,6 +231,7 @@ across two colours (white, black). The chesscog and ChessReD datasets both confi
 - [x] Fine-tuning data efficiency curve (N=2 to 1442, seeds 42/43/44 for N≤50)
 - [x] ChessReD2K per-piece crops extracted (43,149 crops across all splits)
 - [x] ResNet-50 baseline trained: 99.89% top-1 accuracy on test crops
-- [x] Live webcam demo script implemented
+- [x] Live webcam demo script implemented (not evaluated)
+- [x] Final report written
 - [ ] Webcam demo tested against a live chessboard
 - [ ] Own photographs for angle/lighting analysis with fixed chess set
